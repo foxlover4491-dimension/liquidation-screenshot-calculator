@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BTC 헤지 포지션 청산가 계산기</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#090d14;--panel:#111827;--line:#263247;--text:#f8fafc;--muted:#94a3b8;--green:#2dd4bf;--red:#fb7185;--blue:#60a5fa;--amber:#fbbf24}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#1e293b 0,var(--bg) 42%);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Pretendard","Noto Sans KR",sans-serif}
+    main{width:min(1180px,calc(100% - 28px));margin:0 auto;padding:30px 0 56px}h1{margin:0;font-size:clamp(24px,4vw,40px);letter-spacing:-.04em}h2{margin:0 0 14px;font-size:20px}p{margin:6px 0;color:var(--muted)}
+    .top{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:20px}.privacy{font-size:12px;text-align:right}.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 18px 60px #0004}.upload{display:grid;grid-template-columns:minmax(220px,1fr) 180px;gap:18px;align-items:center}.drop{display:grid;place-items:center;min-height:132px;border:1px dashed #475569;border-radius:14px;cursor:pointer;text-align:center;padding:20px;background:#0b1220}.drop:hover{border-color:var(--blue)}.drop strong{font-size:17px}.drop input{position:absolute;opacity:0;pointer-events:none}.preview{width:100%;height:132px;object-fit:contain;background:#05070b;border-radius:12px}.status{margin-top:10px;min-height:20px;color:var(--blue)}
+    .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.metric{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0b1220}.metric span{display:block;color:var(--muted);font-size:12px}.metric b{display:block;margin-top:3px;font-size:17px}.long{color:var(--green)}.short{color:var(--red)}.warn{color:var(--amber)}
+    .results{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.wide{grid-column:1/-1}.legend{display:flex;gap:18px;flex-wrap:wrap;margin:-6px 0 12px;color:var(--muted);font-size:12px}.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px}table{width:100%;border-collapse:collapse;min-width:560px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th{position:sticky;top:0;background:#172033;color:#cbd5e1;font-size:12px}th:first-child,td:first-child{text-align:center}tr:last-child td{border-bottom:0}td strong{font-variant-numeric:tabular-nums;font-size:15px}td small{display:block;color:var(--muted);margin-top:2px}.near{background:#451a1a66}.safe{background:#052e2b44}
+    .custom{display:grid;grid-template-columns:190px 150px 1fr 1fr;gap:12px;align-items:end}.field label{display:block;color:var(--muted);font-size:12px;margin:0 0 5px}.field input,.field select{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:#0b1220;color:var(--text);padding:0 11px;font:inherit}.answer{min-height:70px;border:1px solid var(--line);border-radius:12px;padding:10px 13px;background:#0b1220}.answer span{color:var(--muted);font-size:12px}.answer b{display:block;margin-top:3px;font-size:19px}
+    details{margin-top:16px}summary{cursor:pointer;color:#cbd5e1}.inputs{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px}.raw{width:100%;height:100px;margin-top:10px;border:1px solid var(--line);border-radius:10px;background:#05070b;color:#94a3b8;padding:10px;resize:vertical}.error{color:var(--red)}
+    @media(max-width:860px){.top{display:block}.privacy{text-align:left}.results{grid-template-columns:1fr}.wide{grid-column:auto}.summary{grid-template-columns:1fr 1fr}.custom{grid-template-columns:1fr 1fr}.answer{grid-column:span 1}.inputs{grid-template-columns:1fr 1fr}.upload{grid-template-columns:1fr}.preview{height:180px}}
+    @media(max-width:520px){main{width:min(100% - 16px,1180px);padding-top:18px}.panel{padding:14px;border-radius:14px}.summary,.custom{grid-template-columns:1fr}.inputs{grid-template-columns:1fr}.answer{grid-column:auto}.privacy{display:none}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div><h1>헤지 포지션 청산가 레이더</h1><p>캡처 한 장으로 정리·추가진입 시나리오를 동시에 계산합니다.</p></div>
+    <p class="privacy">이미지는 이 브라우저 안에서만 OCR 처리되며 업로드되지 않습니다.</p>
+  </header>
+
+  <section class="panel">
+    <div class="upload">
+      <label class="drop" for="shot"><span><strong>화면 캡처 넣기</strong><br><small>클릭하여 이미지 선택</small></span><input id="shot" type="file" accept="image/*"></label>
+      <img id="preview" class="preview" alt="선택한 캡처 미리보기">
+    </div>
+    <div id="status" class="status">캡처를 선택하면 자동으로 계산합니다.</div>
+    <p>예상값입니다. 주문 전 거래소에 표시되는 청산가를 반드시 확인하세요.</p>
+    <div id="summary" class="summary" hidden></div>
+
+    <details id="edit">
+      <summary>인식값 확인·수정</summary>
+      <div class="inputs">
+        <div class="field"><label for="mark">현재 마크가</label><input id="mark" inputmode="decimal"></div>
+        <div class="field"><label for="ratio">마진 비율 (%)</label><input id="ratio" inputmode="decimal"></div>
+        <div class="field"><label for="shortEntry">숏 진입가</label><input id="shortEntry" inputmode="decimal"></div>
+        <div class="field"><label for="shortValue">숏 포지션(USDT)</label><input id="shortValue" inputmode="decimal"></div>
+        <div class="field"><label for="shortPnl">숏 미실현 PNL</label><input id="shortPnl" inputmode="decimal"></div>
+        <div class="field"><label for="longEntry">롱 진입가</label><input id="longEntry" inputmode="decimal"></div>
+        <div class="field"><label for="longValue">롱 포지션(USDT)</label><input id="longValue" inputmode="decimal"></div>
+        <div class="field"><label for="longPnl">롱 미실현 PNL</label><input id="longPnl" inputmode="decimal"></div>
+        <div class="field"><label for="fee">시장가 수수료 (%)</label><input id="fee" value="0.06" inputmode="decimal"></div>
+        <div class="field"><label for="formula">유지증거금 계산</label><select id="formula"><option value="tiered">Bitget 현재 누진식</option><option value="legacy">Bitget 구 포지션식</option></select></div>
+      </div>
+      <textarea id="raw" class="raw" readonly placeholder="OCR 원문"></textarea>
+    </details>
+  </section>
+
+  <div id="results" class="results" hidden>
+    <section class="panel wide">
+      <h2>부분 정리</h2>
+      <div class="legend"><span><i style="background:var(--green)"></i>숏 정리 → 남은 롱의 하방 청산가</span><span><i style="background:var(--red)"></i>롱 정리 → 남은 숏의 상방 청산가</span></div>
+      <div class="table-wrap"><table><thead><tr><th>정리율</th><th>숏 정리 후</th><th>현재가 거리</th><th>롱 정리 후</th><th>현재가 거리</th></tr></thead><tbody id="closeRows"></tbody></table></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>현재 포지션 대비 추가 진입</h2>
+      <div class="legend"><span><i style="background:var(--red)"></i>숏 추가</span><span><i style="background:var(--green)"></i>롱 추가</span><span>현재가 시장가 진입·수수료 반영</span></div>
+      <div class="table-wrap"><table><thead><tr><th>추가율</th><th>숏 추가 후</th><th>현재가 거리</th><th>롱 추가 후</th><th>현재가 거리</th></tr></thead><tbody id="addRows"></tbody></table></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>증거금 금액으로 추가 진입</h2>
+      <div class="custom">
+        <div class="field"><label for="marginAmount">레버리지 전 증거금 (USDT)</label><input id="marginAmount" type="number" min="0" step="100" value="1000"></div>
+        <div class="field"><label for="leverage">레버리지</label><input id="leverage" type="number" min="1" step="1" value="30"></div>
+        <div id="customShort" class="answer"></div><div id="customLong" class="answer"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id), presets=[80,70,60,50,40,30,20,10,5];
+const tiers=[[0,200000,.004],[200000,1e6,.005],[1e6,5e6,.007],[5e6,15e6,.01],[15e6,50e6,.02],[50e6,1e8,.03],[1e8,1.5e8,.06],[1.5e8,3e8,.12],[3e8,5e8,.15],[5e8,7e8,.2],[7e8,9e8,.3],[9e8,1.2e9,.6]];
+const offsets=tiers.map((t,i)=>i?tiers.slice(1,i+1).reduce((s,x,j)=>s+x[0]*(x[2]-tiers[j][2]),0):0);
+const fieldIds=['mark','ratio','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','formula','marginAmount','leverage'];
+const num=s=>Number(String(s??'').replace(/[%,$₩\s]/g,'').replaceAll(',',''));
+const money=n=>Number.isFinite(n)?n.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}):'—';
+
+function maintenance(value,fee,legacy=false){
+  let i=tiers.findIndex(t=>value<=t[1]); if(i<0)i=tiers.length-1;
+  return value*(tiers[i][2]+fee)-(legacy?0:offsets[i]);
+}
+function readState(){
+  const v=Object.fromEntries(fieldIds.map(id=>[id,$(id).value]));
+  for(const k of ['mark','ratio','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','marginAmount','leverage'])v[k]=num(v[k]);
+  v.ratio/=100;v.fee/=100;v.legacy=v.formula==='legacy';
+  if(![v.mark,v.ratio,v.shortEntry,v.shortValue,v.shortPnl,v.longEntry,v.longValue,v.longPnl].every(Number.isFinite)||v.mark<=0||v.ratio<=0)return null;
+  v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;
+  const mm=maintenance(Math.max(v.qS,v.qL)*v.mark,v.fee,v.legacy);
+  v.equity=mm/v.ratio;v.balance=v.equity-v.shortPnl-v.longPnl;
+  return v;
+}
+function liquidation(s){
+  const qMax=Math.max(s.qL,s.qS),net=s.qL-s.qS,eq=s.balance+s.qL*(s.mark-s.eL)+s.qS*(s.eS-s.mark),mm=maintenance(qMax*s.mark,s.fee,s.legacy);
+  if(eq<=mm)return {immediate:true,side:net>=0?'롱':'숏',risk:mm/eq};
+  if(Math.abs(net)<1e-10)return {price:null,side:'중립',risk:mm/eq};
+  const candidates=[];
+  for(let i=0;i<tiers.length;i++){
+    const den=(tiers[i][2]+s.fee)*qMax-s.qL+s.qS;
+    if(Math.abs(den)<1e-12)continue;
+    const p=(s.balance-s.qL*s.eL+s.qS*s.eS+(s.legacy?0:offsets[i]))/den,notional=p*qMax;
+    if(p>0&&notional>=tiers[i][0]-1e-6&&notional<=tiers[i][1]+1e-6)candidates.push(p);
+  }
+  const adverse=net>0?candidates.filter(p=>p<s.mark):candidates.filter(p=>p>s.mark);
+  const price=adverse.length?(net>0?Math.max(...adverse):Math.min(...adverse)):null;
+  return {price,side:net>0?'롱':'숏',risk:mm/eq,net};
+}
+function act(v,type,fraction,margin){
+  const s={mark:v.mark,fee:v.fee,legacy:v.legacy,balance:v.balance,qL:v.qL,qS:v.qS,eL:v.longEntry,eS:v.shortEntry};
+  if(type==='closeShort'){const q=s.qS*fraction;s.balance+=q*(s.eS-s.mark)-q*s.mark*s.fee;s.qS-=q}
+  if(type==='closeLong'){const q=s.qL*fraction;s.balance+=q*(s.mark-s.eL)-q*s.mark*s.fee;s.qL-=q}
+  if(type==='addShort'){const q=margin!=null?margin*v.leverage/s.mark:s.qS*fraction;s.balance-=q*s.mark*s.fee;s.eS=(s.qS*s.eS+q*s.mark)/(s.qS+q);s.qS+=q}
+  if(type==='addLong'){const q=margin!=null?margin*v.leverage/s.mark:s.qL*fraction;s.balance-=q*s.mark*s.fee;s.eL=(s.qL*s.eL+q*s.mark)/(s.qL+q);s.qL+=q}
+  return {...liquidation(s),qL:s.qL,qS:s.qS,notional:margin!=null?margin*v.leverage:null};
+}
+function resultCell(r,mark){
+  if(r.immediate)return `<strong class="warn">즉시 청산 위험</strong><small>현재 위험비율 ${money(r.risk*100)}%</small>`;
+  if(!r.price)return `<strong>표시 없음</strong><small>현재 구조상 양(+)의 청산가 없음</small>`;
+  return `<strong class="${r.side==='롱'?'long':'short'}">${money(r.price)}</strong><small>${r.side} · 순포지션 ${money(Math.abs(r.qL-r.qS))} BTC</small>`;
+}
+function distanceCell(r,mark){if(!r.price||r.immediate)return '—';const d=Math.abs(r.price-mark)/mark*100;return `<strong>${money(d)}%</strong>`}
+function rowClass(a,b,mark){const distances=[a,b].filter(x=>x.price).map(x=>Math.abs(x.price-mark)/mark);return distances.length&&Math.min(...distances)<.02?'near':distances.length&&Math.min(...distances)>.15?'safe':''}
+function render(){
+  const v=readState();if(!v){$('results').hidden=true;$('summary').hidden=true;return}
+  $('results').hidden=false;$('summary').hidden=false;
+  const net=v.qL-v.qS;
+  $('summary').innerHTML=`<div class="metric"><span>현재 마크가</span><b>${money(v.mark)}</b></div><div class="metric"><span>추정 계정 평가금</span><b>${money(v.equity)} USDT</b></div><div class="metric"><span>현재 순포지션</span><b class="${net>=0?'long':'short'}">${net>=0?'롱':'숏'} ${money(Math.abs(net))} BTC</b></div><div class="metric"><span>현재 마진 비율</span><b>${money(v.ratio*100)}%</b></div>`;
+  $('closeRows').innerHTML=presets.map(p=>{const a=act(v,'closeShort',p/100),b=act(v,'closeLong',p/100);return `<tr class="${rowClass(a,b,v.mark)}"><td><strong>${p}%</strong></td><td>${resultCell(a,v.mark)}</td><td>${distanceCell(a,v.mark)}</td><td>${resultCell(b,v.mark)}</td><td>${distanceCell(b,v.mark)}</td></tr>`}).join('');
+  $('addRows').innerHTML=presets.map(p=>{const a=act(v,'addShort',p/100),b=act(v,'addLong',p/100);return `<tr class="${rowClass(a,b,v.mark)}"><td><strong>+${p}%</strong></td><td>${resultCell(a,v.mark)}</td><td>${distanceCell(a,v.mark)}</td><td>${resultCell(b,v.mark)}</td><td>${distanceCell(b,v.mark)}</td></tr>`}).join('');
+  const amount=Math.max(0,v.marginAmount||0),a=act(v,'addShort',0,amount),b=act(v,'addLong',0,amount),note=`증거금 ${money(amount)} × ${money(v.leverage)} = ${money(amount*v.leverage)} USDT`;
+  $('customShort').innerHTML=`<span>숏 추가 · ${note}</span>${resultCell(a,v.mark)}`;$('customLong').innerHTML=`<span>롱 추가 · ${note}</span>${resultCell(b,v.mark)}`;
+}
+
+function numericTokens(text){return [...text.replace(/[−–—]/g,'-').matchAll(/[+\-]?\s*\d[\d,]*(?:\.\d+)?\s*%?/g)].map(m=>({raw:m[0],value:num(m[0]),percent:m[0].includes('%')}));}
+function parseCard(text){
+  const t=numericTokens(text),perc=t.filter(x=>x.percent),plain=t.filter(x=>!x.percent&&Math.abs(x.value)>1000);
+  if(plain.length<5)return null;
+  const pnl=plain[0].value,position=plain[1].value,margin=plain[2].value,entry=plain[3].value,mark=plain[4].value;
+  let side;if(/(?:숏|short)/i.test(text))side='short';else if(/(?:롱|long)/i.test(text))side='long';else side=pnl*(entry-mark)>=0?'short':'long';
+  return {side,pnl,position,margin,entry,mark,ratio:perc[1]?.value??perc.at(-1)?.value};
+}
+function parseOCR(text){
+  let parts=text.split(/BTC\s*USDT/i).slice(1).map(parseCard).filter(Boolean);
+  if(parts.length<2){const cards=text.split(/(?=[+\-]\s*\d[\d,]*\.\d{2,})/).map(parseCard).filter(Boolean);parts=cards.slice(0,2)}
+  const short=parts.find(x=>x.side==='short'),long=parts.find(x=>x.side==='long');if(!short||!long)throw Error('롱·숏 두 포지션을 구분하지 못했습니다.');
+  const mark=(short.mark+long.mark)/2,qS=short.position/mark,qL=long.position/mark;
+  const shortEntry=mark+short.pnl/qS,longEntry=mark-long.pnl/qL;
+  return {mark,ratio:short.ratio||long.ratio,shortEntry,shortValue:short.position,shortPnl:short.pnl,longEntry,longValue:long.position,longPnl:long.pnl};
+}
+async function preprocess(file){
+  const img=await createImageBitmap(file),scale=Math.max(2,1200/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height);for(let i=0;i<d.data.length;i+=4){let v=255-Math.max(d.data[i],d.data[i+1],d.data[i+2]);v=Math.max(0,Math.min(255,(v-128)*1.5+128));d.data[i]=d.data[i+1]=d.data[i+2]=v}x.putImageData(d,0,0);return c}
+async function recognize(file){
+  $('status').className='status';$('status').textContent='이미지 선명화 중…';const image=await preprocess(file);
+  const r=await Tesseract.recognize(image,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('status').textContent=`숫자 읽는 중… ${Math.round((m.progress||0)*100)}%`}});return r.data.text;
+}
+$('shot').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;$('preview').src=URL.createObjectURL(file);try{const text=await recognize(file);$('raw').value=text;const values=parseOCR(text);for(const [k,v] of Object.entries(values))$(k).value=v;$('status').textContent='인식 완료 — 아래 계산값을 확인하세요.';render()}catch(err){$('status').className='status error';$('status').textContent=`자동 인식 실패: ${err.message} 아래 ‘인식값 확인·수정’에서 숫자를 입력하세요.`;$('edit').open=true}});
+fieldIds.forEach(id=>$(id).addEventListener(id==='formula'?'change':'input',render));
+
+// ponytail: 한 장의 Bitget형 BTCUSDT 화면만 자동 파싱한다. 다른 거래소 레이아웃이 필요해질 때 파서를 추가한다.
+function selfCheck(){
+  const v={mark:75220.4,ratio:.4725,shortEntry:87592.6,shortValue:1989073.7807,shortPnl:327159.32182,longEntry:93803.2,longValue:1998491.4374,longPnl:-493713.40524,fee:.0006,legacy:false,leverage:30};v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;const mm=maintenance(Math.max(v.qS,v.qL)*v.mark,v.fee);v.equity=mm/v.ratio;v.balance=v.equity-v.shortPnl-v.longPnl;console.assert(Math.abs(act(v,'closeShort',.8).price-74577.8)<2,'close-short check');console.assert(Math.abs(act(v,'closeLong',.8).price-75858.5)<2,'close-long check')}
+selfCheck();
+</script>
+</body>
+</html>
