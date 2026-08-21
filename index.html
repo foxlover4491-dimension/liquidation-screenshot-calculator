@@ -141,7 +141,7 @@ function numericTokens(text){return [...text.replace(/\([^)]*\)/g,'').replace(/[
 function parseCard(text){
   const t=numericTokens(text),perc=t.filter(x=>x.percent),plain=t.filter(x=>!x.percent&&Math.abs(x.value)>1000);
   if(plain.length<5)return null;
-  const pnl=plain[0].value,position=plain[1].value,margin=plain[2].value,entry=plain[3].value,mark=plain[4].value;
+  const pnl=plain[0].value,margin=plain[2].value,entry=plain[3].value,mark=plain[4].value,position=/(?:\bCont\b|Contracts?|계약)/i.test(text)?plain[1].value*.0001*mark:plain[1].value;
   let side;if(/(?:숏|short)/i.test(text))side='short';else if(/(?:롱|long)/i.test(text))side='long';else side=pnl*(entry-mark)>=0?'short':'long';
   return {side,pnl,position,margin,entry,mark,ratio:perc.at(-1)?.value};
 }
@@ -170,7 +170,8 @@ fieldIds.forEach(id=>$(id).addEventListener('input',render));
 // ponytail: 현재 사용 중인 MEXC 통합 화면만 파싱한다. 다른 거래소가 필요할 때 별도 파서를 추가한다.
 function selfCheck(){
   const v={mark:75220.4,walletBalance:273373.69329846,balance:273373.69329846,orderMargin:0,shortEntry:87592.6,shortValue:1989073.7807,longEntry:93803.2,longValue:1998491.4374,fee:.0002,liqFee:.0004,mmrOverride:NaN,leverage:30};v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;console.assert(Math.abs(act(v,'closeShort',1).price-71712.6)<2,'close-all-short check');console.assert(Math.abs(act(v,'closeShort',.5).price-68681.4)<2,'close-half-short check');console.assert(Math.abs(act(v,'closeShort',.3).price-64676.5)<2,'close-30%-short check');
-  const combined=parseOCR('106,896.14 USD\nBTCUSDT 무기한 숏\n+297,212.51107 +384.95% 2,018,795.8251 78,608.6797 47.22% 87,592.6 76,352.9 0\nBTCUSDT 무기한 롱\n-463,624.80549 -558.09% 2,028,354.2066 84,568.3622 47.22% 93,803.2 76,352.9 0');console.assert(Math.abs(combined.walletBalance-273308.43442)<.01,'one-screen wallet check')}
+  const combined=parseOCR('106,896.14 USD\nBTCUSDT 무기한 숏\n+297,212.51107 +384.95% 2,018,795.8251 78,608.6797 47.22% 87,592.6 76,352.9 0\nBTCUSDT 무기한 롱\n-463,624.80549 -558.09% 2,028,354.2066 84,568.3622 47.22% 93,803.2 76,352.9 0');console.assert(Math.abs(combined.walletBalance-273308.43442)<.01&&combined.shortValue===2018795.8251,'one-screen USDT check');
+  const contracts=parseOCR('23,180.6 USD\nBTCUSDT Perp Short Cross 50X\n+18,980.99544 +193.53% Size(Cont) 59,928 Margin(USDT) 10,103.1119 Margin Ratio 26.29% Entry Price 81,826.6 Mark Price 78,659.3 Est. Liq. Price 326,972.7\nBTCUSDT Perp Long Cross 50X\n-150,770.93444 -1,221.19% Size(Cont) 59,311 Margin(USDT) 12,716.538 Margin Ratio 26.29% Entry Price 104,079.7 Mark Price 78,659.3 Est. Liq. Price 326,972.7');console.assert(Math.abs(contracts.shortValue/contracts.mark-5.9928)<1e-9&&Math.abs(contracts.longValue/contracts.mark-5.9311)<1e-9&&Math.abs(contracts.walletBalance-154970.539)<.01,'contract-size screen check')}
 selfCheck();
 </script>
 </body>
