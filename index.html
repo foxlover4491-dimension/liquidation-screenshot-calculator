@@ -78,7 +78,7 @@
 </main>
 
 <script>
-const $=id=>document.getElementById(id), presets=[80,70,60,50,40,30,20,10,5];
+const $=id=>document.getElementById(id), presets=[100,80,70,60,50,40,30,20,10,5];
 const tiers=[[0,200000,.004],[200000,1e6,.005],[1e6,5e6,.007],[5e6,15e6,.01],[15e6,50e6,.02],[50e6,1e8,.03],[1e8,1.5e8,.06],[1.5e8,3e8,.12],[3e8,5e8,.15],[5e8,7e8,.2],[7e8,9e8,.3],[9e8,1.2e9,.6]];
 const offsets=tiers.map((t,i)=>i?tiers.slice(1,i+1).reduce((s,x,j)=>s+x[0]*(x[2]-tiers[j][2]),0):0);
 const fieldIds=['mark','ratio','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','formula','marginAmount','leverage'];
@@ -89,6 +89,7 @@ function maintenance(value,fee,legacy=false){
   let i=tiers.findIndex(t=>value<=t[1]); if(i<0)i=tiers.length-1;
   return value*(tiers[i][2]+fee)-(legacy?0:offsets[i]);
 }
+function maintenanceRate(value){let i=tiers.findIndex(t=>value<=t[1]);if(i<0)i=tiers.length-1;return tiers[i][2]}
 function readState(){
   const v=Object.fromEntries(fieldIds.map(id=>[id,$(id).value]));
   for(const k of ['mark','ratio','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','marginAmount','leverage'])v[k]=num(v[k]);
@@ -133,7 +134,8 @@ function render(){
   const v=readState();if(!v){$('results').hidden=true;$('summary').hidden=true;return}
   $('results').hidden=false;$('summary').hidden=false;
   const net=v.qL-v.qS;
-  $('summary').innerHTML=`<div class="metric"><span>현재 마크가</span><b>${money(v.mark)}</b></div><div class="metric"><span>추정 계정 평가금</span><b>${money(v.equity)} USDT</b></div><div class="metric"><span>현재 순포지션</span><b class="${net>=0?'long':'short'}">${net>=0?'롱':'숏'} ${money(Math.abs(net))} BTC</b></div><div class="metric"><span>현재 마진 비율</span><b>${money(v.ratio*100)}%</b></div>`;
+  const positionValue=Math.max(v.qS,v.qL)*v.mark,mmr=maintenanceRate(positionValue),mm=maintenance(positionValue,v.fee,v.legacy);
+  $('summary').innerHTML=`<div class="metric"><span>현재 마크가</span><b>${money(v.mark)}</b></div><div class="metric"><span>추정 계정 평가금</span><b>${money(v.equity)} USDT</b></div><div class="metric"><span>현재 순포지션</span><b class="${net>=0?'long':'short'}">${net>=0?'롱':'숏'} ${money(Math.abs(net))} BTC</b></div><div class="metric"><span>현재 마진 비율</span><b>${money(v.ratio*100)}%</b></div><div class="metric"><span>적용 BTC MMR</span><b>${money(mmr*100)}%</b></div><div class="metric"><span>추정 유지증거금</span><b>${money(mm)} USDT</b></div>`;
   $('closeRows').innerHTML=presets.map(p=>{const a=act(v,'closeShort',p/100),b=act(v,'closeLong',p/100);return `<tr class="${rowClass(a,b,v.mark)}"><td><strong>${p}%</strong></td><td>${resultCell(a,v.mark)}</td><td>${distanceCell(a,v.mark)}</td><td>${resultCell(b,v.mark)}</td><td>${distanceCell(b,v.mark)}</td></tr>`}).join('');
   $('addRows').innerHTML=presets.map(p=>{const a=act(v,'addShort',p/100),b=act(v,'addLong',p/100);return `<tr class="${rowClass(a,b,v.mark)}"><td><strong>+${p}%</strong></td><td>${resultCell(a,v.mark)}</td><td>${distanceCell(a,v.mark)}</td><td>${resultCell(b,v.mark)}</td><td>${distanceCell(b,v.mark)}</td></tr>`}).join('');
   const amount=Math.max(0,v.marginAmount||0),a=act(v,'addShort',0,amount),b=act(v,'addLong',0,amount),note=`증거금 ${money(amount)} × ${money(v.leverage)} = ${money(amount*v.leverage)} USDT`;
@@ -171,7 +173,7 @@ fieldIds.forEach(id=>$(id).addEventListener(id==='formula'?'change':'input',rend
 
 // ponytail: 한 장의 Bitget형 BTCUSDT 화면만 자동 파싱한다. 다른 거래소 레이아웃이 필요해질 때 파서를 추가한다.
 function selfCheck(){
-  const v={mark:75220.4,ratio:.4725,shortEntry:87592.6,shortValue:1989073.7807,shortPnl:327159.32182,longEntry:93803.2,longValue:1998491.4374,longPnl:-493713.40524,fee:.0006,legacy:false,leverage:30};v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;const mm=maintenance(Math.max(v.qS,v.qL)*v.mark,v.fee);v.equity=mm/v.ratio;v.balance=v.equity-v.shortPnl-v.longPnl;console.assert(Math.abs(act(v,'closeShort',.8).price-74577.8)<2,'close-short check');console.assert(Math.abs(act(v,'closeLong',.8).price-75858.5)<2,'close-long check')}
+  const v={mark:75220.4,ratio:.4725,shortEntry:87592.6,shortValue:1989073.7807,shortPnl:327159.32182,longEntry:93803.2,longValue:1998491.4374,longPnl:-493713.40524,fee:.0006,legacy:false,leverage:30};v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;const mm=maintenance(Math.max(v.qS,v.qL)*v.mark,v.fee);v.equity=mm/v.ratio;v.balance=v.equity-v.shortPnl-v.longPnl;console.assert(Math.abs(act(v,'closeShort',1).price-74715.8)<2,'close-all-short check');console.assert(Math.abs(act(v,'closeShort',.8).price-74577.8)<2,'close-short check');console.assert(Math.abs(act(v,'closeLong',.8).price-75858.5)<2,'close-long check')}
 selfCheck();
 </script>
 </body>
