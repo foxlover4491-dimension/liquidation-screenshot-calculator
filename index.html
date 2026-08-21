@@ -9,7 +9,7 @@
     :root{color-scheme:dark;--bg:#090d14;--panel:#111827;--line:#263247;--text:#f8fafc;--muted:#94a3b8;--green:#2dd4bf;--red:#fb7185;--blue:#60a5fa;--amber:#fbbf24}
     *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#1e293b 0,var(--bg) 42%);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Pretendard","Noto Sans KR",sans-serif}
     main{width:min(1180px,calc(100% - 28px));margin:0 auto;padding:30px 0 56px}h1{margin:0;font-size:clamp(24px,4vw,40px);letter-spacing:-.04em}h2{margin:0 0 14px;font-size:20px}p{margin:6px 0;color:var(--muted)}
-    .top{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:20px}.privacy{font-size:12px;text-align:right}.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 18px 60px #0004}.upload{display:grid;grid-template-columns:minmax(220px,1fr) 180px;gap:18px;align-items:center}.drop{display:grid;place-items:center;min-height:132px;border:1px dashed #475569;border-radius:14px;cursor:pointer;text-align:center;padding:20px;background:#0b1220}.drop:hover,.drop.drag{border-color:var(--blue);background:#111d31}.drop strong{font-size:17px}.drop input{position:absolute;opacity:0;pointer-events:none}.preview{width:100%;height:132px;object-fit:contain;background:#05070b;border-radius:12px}.status{margin-top:10px;min-height:20px;color:var(--blue)}
+    .top{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:20px}.privacy{font-size:12px;text-align:right}.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 18px 60px #0004}.upload{display:grid;grid-template-columns:1fr 1fr 180px;gap:12px;align-items:center}.drop{display:grid;place-items:center;min-height:132px;border:1px dashed #475569;border-radius:14px;cursor:pointer;text-align:center;padding:20px;background:#0b1220}.drop:hover,.drop.drag{border-color:var(--blue);background:#111d31}.drop strong{font-size:17px}.drop input{position:absolute;opacity:0;pointer-events:none}.preview{width:100%;height:132px;object-fit:contain;background:#05070b;border-radius:12px}.status{margin-top:10px;min-height:20px;color:var(--blue)}
     .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.metric{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0b1220}.metric span{display:block;color:var(--muted);font-size:12px}.metric b{display:block;margin-top:3px;font-size:17px}.long{color:var(--green)}.short{color:var(--red)}.warn{color:var(--amber)}
     .results{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.wide{grid-column:1/-1}.legend{display:flex;gap:18px;flex-wrap:wrap;margin:-6px 0 12px;color:var(--muted);font-size:12px}.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
     .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px}table{width:100%;border-collapse:collapse;min-width:560px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th{position:sticky;top:0;background:#172033;color:#cbd5e1;font-size:12px}th:first-child,td:first-child{text-align:center}tr:last-child td{border-bottom:0}td strong{font-variant-numeric:tabular-nums;font-size:15px}td small{display:block;color:var(--muted);margin-top:2px}.near{background:#451a1a66}.safe{background:#052e2b44}
@@ -28,10 +28,11 @@
 
   <section class="panel">
     <div class="upload">
-      <label id="drop" class="drop" for="shot"><span><strong>포지션·자산 캡처 넣기</strong><br><small>두 장을 차례로 붙여넣거나 함께 선택</small></span><input id="shot" type="file" accept="image/*" multiple></label>
+      <label class="drop" for="positionShot"><span><strong>① 현재 포지션</strong><br><small>포지션 캡처 선택</small></span><input id="positionShot" type="file" accept="image/*"></label>
+      <label class="drop" for="walletShot"><span><strong>② 현재 자산</strong><br><small>자산 캡처 선택</small></span><input id="walletShot" type="file" accept="image/*"></label>
       <img id="preview" class="preview" alt="선택한 캡처 미리보기">
     </div>
-    <div id="status" class="status">포지션 화면과 ‘자산’ 화면을 넣으면 자동 계산합니다.</div>
+    <div id="status" class="status">각 칸에 한 장씩 넣으세요. 두 장 동시 드래그·붙여넣기도 됩니다.</div>
     <p>예상값입니다. 미체결 주문이 증거금을 점유하면 ‘인식값 확인·수정’에 주문 증거금을 입력하고, 주문 전 거래소 청산가를 확인하세요.</p>
     <div id="summary" class="summary" hidden></div>
 
@@ -170,10 +171,12 @@ async function recognize(file){
   const r=await Tesseract.recognize(image,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('status').textContent=`숫자 읽는 중… ${Math.round((m.progress||0)*100)}%`}});return r.data.text;
 }
 async function loadImage(file){if(!file?.type.startsWith('image/'))return;$('preview').src=URL.createObjectURL(file);try{const text=await recognize(file),parsed=parseScreen(text);$('raw').value=`[${parsed.kind} 화면]\n${text}`;for(const [k,v] of Object.entries(parsed.values))$(k).value=v;$('status').textContent=`${parsed.kind} 화면 인식 완료${readState()?' — 계산을 갱신했습니다.':' — 나머지 화면도 넣어주세요.'}`;render()}catch(err){$('status').className='status error';$('status').textContent=`자동 인식 실패: ${err.message} 아래 ‘인식값 확인·수정’에서 숫자를 입력하세요.`;$('edit').open=true}}
-$('shot').addEventListener('change',async e=>{for(const file of e.target.files)await loadImage(file)});
-document.addEventListener('paste',e=>{const file=[...(e.clipboardData?.items||[])].find(item=>item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();loadImage(file)}});
-for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.add('drag')});
-for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{$('drop').classList.remove('drag');if(event==='drop'){e.preventDefault();[...e.dataTransfer.files].forEach(loadImage)}});
+for(const id of ['positionShot','walletShot'])$(id).addEventListener('change',async e=>{for(const file of e.target.files)await loadImage(file);e.target.value=''});
+document.addEventListener('paste',async e=>{const files=[...(e.clipboardData?.items||[])].filter(item=>item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();for(const file of files)await loadImage(file)}});
+for(const drop of document.querySelectorAll('.drop')){
+  for(const event of ['dragenter','dragover'])drop.addEventListener(event,e=>{e.preventDefault();drop.classList.add('drag')});
+  for(const event of ['dragleave','drop'])drop.addEventListener(event,async e=>{drop.classList.remove('drag');if(event==='drop'){e.preventDefault();for(const file of e.dataTransfer.files)await loadImage(file)}})
+}
 fieldIds.forEach(id=>$(id).addEventListener('input',render));
 
 // ponytail: 현재 사용 중인 MEXC 두 화면만 파싱한다. 다른 거래소가 필요할 때 별도 파서를 추가한다.
