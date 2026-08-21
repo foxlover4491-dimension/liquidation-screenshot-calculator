@@ -9,7 +9,7 @@
     :root{color-scheme:dark;--bg:#090d14;--panel:#111827;--line:#263247;--text:#f8fafc;--muted:#94a3b8;--green:#2dd4bf;--red:#fb7185;--blue:#60a5fa;--amber:#fbbf24}
     *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#1e293b 0,var(--bg) 42%);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Pretendard","Noto Sans KR",sans-serif}
     main{width:min(1180px,calc(100% - 28px));margin:0 auto;padding:30px 0 56px}h1{margin:0;font-size:clamp(24px,4vw,40px);letter-spacing:-.04em}h2{margin:0 0 14px;font-size:20px}p{margin:6px 0;color:var(--muted)}
-    .top{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:20px}.privacy{font-size:12px;text-align:right}.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 18px 60px #0004}.upload{display:grid;grid-template-columns:minmax(220px,1fr) 180px;gap:18px;align-items:center}.drop{display:grid;place-items:center;min-height:132px;border:1px dashed #475569;border-radius:14px;cursor:pointer;text-align:center;padding:20px;background:#0b1220}.drop:hover{border-color:var(--blue)}.drop strong{font-size:17px}.drop input{position:absolute;opacity:0;pointer-events:none}.preview{width:100%;height:132px;object-fit:contain;background:#05070b;border-radius:12px}.status{margin-top:10px;min-height:20px;color:var(--blue)}
+    .top{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:20px}.privacy{font-size:12px;text-align:right}.panel{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 18px 60px #0004}.upload{display:grid;grid-template-columns:minmax(220px,1fr) 180px;gap:18px;align-items:center}.drop{display:grid;place-items:center;min-height:132px;border:1px dashed #475569;border-radius:14px;cursor:pointer;text-align:center;padding:20px;background:#0b1220}.drop:hover,.drop.drag{border-color:var(--blue);background:#111d31}.drop strong{font-size:17px}.drop input{position:absolute;opacity:0;pointer-events:none}.preview{width:100%;height:132px;object-fit:contain;background:#05070b;border-radius:12px}.status{margin-top:10px;min-height:20px;color:var(--blue)}
     .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.metric{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0b1220}.metric span{display:block;color:var(--muted);font-size:12px}.metric b{display:block;margin-top:3px;font-size:17px}.long{color:var(--green)}.short{color:var(--red)}.warn{color:var(--amber)}
     .results{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.wide{grid-column:1/-1}.legend{display:flex;gap:18px;flex-wrap:wrap;margin:-6px 0 12px;color:var(--muted);font-size:12px}.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
     .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px}table{width:100%;border-collapse:collapse;min-width:560px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th{position:sticky;top:0;background:#172033;color:#cbd5e1;font-size:12px}th:first-child,td:first-child{text-align:center}tr:last-child td{border-bottom:0}td strong{font-variant-numeric:tabular-nums;font-size:15px}td small{display:block;color:var(--muted);margin-top:2px}.near{background:#451a1a66}.safe{background:#052e2b44}
@@ -28,7 +28,7 @@
 
   <section class="panel">
     <div class="upload">
-      <label class="drop" for="shot"><span><strong>화면 캡처 넣기</strong><br><small>클릭하여 이미지 선택</small></span><input id="shot" type="file" accept="image/*"></label>
+      <label id="drop" class="drop" for="shot"><span><strong>화면 캡처 넣기</strong><br><small>클릭 · 붙여넣기(⌘/Ctrl+V) · 드래그</small></span><input id="shot" type="file" accept="image/*"></label>
       <img id="preview" class="preview" alt="선택한 캡처 미리보기">
     </div>
     <div id="status" class="status">캡처를 선택하면 자동으로 계산합니다.</div>
@@ -140,13 +140,13 @@ function render(){
   $('customShort').innerHTML=`<span>숏 추가 · ${note}</span>${resultCell(a,v.mark)}`;$('customLong').innerHTML=`<span>롱 추가 · ${note}</span>${resultCell(b,v.mark)}`;
 }
 
-function numericTokens(text){return [...text.replace(/[−–—]/g,'-').matchAll(/[+\-]?\s*\d[\d,]*(?:\.\d+)?\s*%?/g)].map(m=>({raw:m[0],value:num(m[0]),percent:m[0].includes('%')}));}
+function numericTokens(text){return [...text.replace(/\([^)]*\)/g,'').replace(/[−–—]/g,'-').matchAll(/[+\-]?\s*\d[\d,]*(?:\.\d+)?\s*%?/g)].map(m=>({raw:m[0],value:num(m[0]),percent:m[0].includes('%')}));}
 function parseCard(text){
   const t=numericTokens(text),perc=t.filter(x=>x.percent),plain=t.filter(x=>!x.percent&&Math.abs(x.value)>1000);
   if(plain.length<5)return null;
   const pnl=plain[0].value,position=plain[1].value,margin=plain[2].value,entry=plain[3].value,mark=plain[4].value;
   let side;if(/(?:숏|short)/i.test(text))side='short';else if(/(?:롱|long)/i.test(text))side='long';else side=pnl*(entry-mark)>=0?'short':'long';
-  return {side,pnl,position,margin,entry,mark,ratio:perc[1]?.value??perc.at(-1)?.value};
+  return {side,pnl,position,margin,entry,mark,ratio:perc.at(-1)?.value};
 }
 function parseOCR(text){
   let parts=text.split(/BTC\s*USDT/i).slice(1).map(parseCard).filter(Boolean);
@@ -157,12 +157,16 @@ function parseOCR(text){
   return {mark,ratio:short.ratio||long.ratio,shortEntry,shortValue:short.position,shortPnl:short.pnl,longEntry,longValue:long.position,longPnl:long.pnl};
 }
 async function preprocess(file){
-  const img=await createImageBitmap(file),scale=Math.max(2,1200/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height);for(let i=0;i<d.data.length;i+=4){let v=255-Math.max(d.data[i],d.data[i+1],d.data[i+2]);v=Math.max(0,Math.min(255,(v-128)*1.5+128));d.data[i]=d.data[i+1]=d.data[i+2]=v}x.putImageData(d,0,0);return c}
+  const img=await createImageBitmap(file),scale=Math.min(3,Math.max(1,1200/img.width)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height);for(let i=0;i<d.data.length;i+=4){let v=255-Math.max(d.data[i],d.data[i+1],d.data[i+2]);v=Math.max(0,Math.min(255,(v-128)*1.5+128));d.data[i]=d.data[i+1]=d.data[i+2]=v}x.putImageData(d,0,0);return c}
 async function recognize(file){
   $('status').className='status';$('status').textContent='이미지 선명화 중…';const image=await preprocess(file);
   const r=await Tesseract.recognize(image,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('status').textContent=`숫자 읽는 중… ${Math.round((m.progress||0)*100)}%`}});return r.data.text;
 }
-$('shot').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;$('preview').src=URL.createObjectURL(file);try{const text=await recognize(file);$('raw').value=text;const values=parseOCR(text);for(const [k,v] of Object.entries(values))$(k).value=v;$('status').textContent='인식 완료 — 아래 계산값을 확인하세요.';render()}catch(err){$('status').className='status error';$('status').textContent=`자동 인식 실패: ${err.message} 아래 ‘인식값 확인·수정’에서 숫자를 입력하세요.`;$('edit').open=true}});
+async function loadImage(file){if(!file?.type.startsWith('image/'))return;$('preview').src=URL.createObjectURL(file);try{const text=await recognize(file);$('raw').value=text;const values=parseOCR(text);for(const [k,v] of Object.entries(values))$(k).value=v;$('status').textContent='인식 완료 — 아래 계산값을 확인하세요.';render()}catch(err){$('status').className='status error';$('status').textContent=`자동 인식 실패: ${err.message} 아래 ‘인식값 확인·수정’에서 숫자를 입력하세요.`;$('edit').open=true}}
+$('shot').addEventListener('change',e=>loadImage(e.target.files[0]));
+document.addEventListener('paste',e=>{const file=[...(e.clipboardData?.items||[])].find(item=>item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();loadImage(file)}});
+for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.add('drag')});
+for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{$('drop').classList.remove('drag');if(event==='drop'){e.preventDefault();loadImage(e.dataTransfer.files[0])}});
 fieldIds.forEach(id=>$(id).addEventListener(id==='formula'?'change':'input',render));
 
 // ponytail: 한 장의 Bitget형 BTCUSDT 화면만 자동 파싱한다. 다른 거래소 레이아웃이 필요해질 때 파서를 추가한다.
