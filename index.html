@@ -22,32 +22,36 @@
 <body>
 <main>
   <header class="top">
-    <div><h1>헤지 포지션 청산가 레이더</h1><p>캡처 한 장으로 정리·추가진입 시나리오를 동시에 계산합니다.</p></div>
+    <div><h1>헤지 포지션 청산가 레이더</h1><p>MEXC 포지션·자산 캡처로 정리·추가진입 시나리오를 계산합니다.</p></div>
     <p class="privacy">이미지는 이 브라우저 안에서만 OCR 처리되며 업로드되지 않습니다.</p>
   </header>
 
   <section class="panel">
     <div class="upload">
-      <label id="drop" class="drop" for="shot"><span><strong>화면 캡처 넣기</strong><br><small>클릭 · 붙여넣기(⌘/Ctrl+V) · 드래그</small></span><input id="shot" type="file" accept="image/*"></label>
+      <label id="drop" class="drop" for="shot"><span><strong>포지션·자산 캡처 넣기</strong><br><small>두 장을 차례로 붙여넣거나 함께 선택</small></span><input id="shot" type="file" accept="image/*" multiple></label>
       <img id="preview" class="preview" alt="선택한 캡처 미리보기">
     </div>
-    <div id="status" class="status">캡처를 선택하면 자동으로 계산합니다.</div>
-    <p>예상값입니다. 주문 전 거래소에 표시되는 청산가를 반드시 확인하세요.</p>
+    <div id="status" class="status">포지션 화면과 ‘자산’ 화면을 넣으면 자동 계산합니다.</div>
+    <p>예상값입니다. 미체결 주문이 증거금을 점유하면 ‘인식값 확인·수정’에 주문 증거금을 입력하고, 주문 전 거래소 청산가를 확인하세요.</p>
     <div id="summary" class="summary" hidden></div>
 
     <details id="edit">
       <summary>인식값 확인·수정</summary>
       <div class="inputs">
         <div class="field"><label for="mark">현재 마크가</label><input id="mark" inputmode="decimal"></div>
-        <div class="field"><label for="ratio">마진 비율 (%)</label><input id="ratio" inputmode="decimal"></div>
+        <div class="field"><label for="ratio">화면의 마진 비율 (%)</label><input id="ratio" inputmode="decimal"></div>
+        <div class="field"><label for="walletBalance">지갑 잔액 (USDT)</label><input id="walletBalance" inputmode="decimal"></div>
+        <div class="field"><label for="walletPnl">계정 미실현 PNL</label><input id="walletPnl" inputmode="decimal"></div>
+        <div class="field"><label for="orderMargin">미체결 주문 증거금</label><input id="orderMargin" value="0" inputmode="decimal"></div>
         <div class="field"><label for="shortEntry">숏 진입가</label><input id="shortEntry" inputmode="decimal"></div>
         <div class="field"><label for="shortValue">숏 포지션(USDT)</label><input id="shortValue" inputmode="decimal"></div>
         <div class="field"><label for="shortPnl">숏 미실현 PNL</label><input id="shortPnl" inputmode="decimal"></div>
         <div class="field"><label for="longEntry">롱 진입가</label><input id="longEntry" inputmode="decimal"></div>
         <div class="field"><label for="longValue">롱 포지션(USDT)</label><input id="longValue" inputmode="decimal"></div>
         <div class="field"><label for="longPnl">롱 미실현 PNL</label><input id="longPnl" inputmode="decimal"></div>
-        <div class="field"><label for="fee">시장가 수수료 (%)</label><input id="fee" value="0.06" inputmode="decimal"></div>
-        <div class="field"><label for="formula">유지증거금 계산</label><select id="formula"><option value="tiered">Bitget 현재 누진식</option><option value="legacy">Bitget 구 포지션식</option></select></div>
+        <div class="field"><label for="fee">시장가 수수료 (%)</label><input id="fee" value="0.02" inputmode="decimal"></div>
+        <div class="field"><label for="liqFee">강제청산 수수료 (%)</label><input id="liqFee" value="0.04" inputmode="decimal"></div>
+        <div class="field"><label for="mmrOverride">MMR 직접 입력 (%)</label><input id="mmrOverride" inputmode="decimal" placeholder="비우면 MEXC 자동"></div>
       </div>
       <textarea id="raw" class="raw" readonly placeholder="OCR 원문"></textarea>
     </details>
@@ -79,44 +83,36 @@
 
 <script>
 const $=id=>document.getElementById(id), presets=[100,80,70,60,50,40,30,20,10,5];
-const tiers=[[0,200000,.004],[200000,1e6,.005],[1e6,5e6,.007],[5e6,15e6,.01],[15e6,50e6,.02],[50e6,1e8,.03],[1e8,1.5e8,.06],[1.5e8,3e8,.12],[3e8,5e8,.15],[5e8,7e8,.2],[7e8,9e8,.3],[9e8,1.2e9,.6]];
-const offsets=tiers.map((t,i)=>i?tiers.slice(1,i+1).reduce((s,x,j)=>s+x[0]*(x[2]-tiers[j][2]),0):0);
-const fieldIds=['mark','ratio','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','formula','marginAmount','leverage'];
-const num=s=>Number(String(s??'').replace(/[%,$₩\s]/g,'').replaceAll(',',''));
+// BTCUSDT 1계약=0.0001 BTC. 수량별 MEXC 현재 위험 한도.
+const tiers=[[0,5,.001],[5,12,.004],[12,32,.005],[32,280,.01],[280,1750,.02],[1750,1850,.05]];
+const fieldIds=['mark','ratio','walletBalance','walletPnl','orderMargin','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','liqFee','mmrOverride','marginAmount','leverage'];
+const num=s=>{const cleaned=String(s??'').replace(/[%,$₩\s]/g,'').replaceAll(',','');return cleaned===''?NaN:Number(cleaned)};
 const money=n=>Number.isFinite(n)?n.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}):'—';
 
-function maintenance(value,fee,legacy=false){
-  let i=tiers.findIndex(t=>value<=t[1]); if(i<0)i=tiers.length-1;
-  return value*(tiers[i][2]+fee)-(legacy?0:offsets[i]);
-}
-function maintenanceRate(value){let i=tiers.findIndex(t=>value<=t[1]);if(i<0)i=tiers.length-1;return tiers[i][2]}
+function maintenanceRate(q,override){if(Number.isFinite(override)&&override>0)return override;return (tiers.find(t=>q<=t[1])||tiers.at(-1))[2]}
+function maintenance(q,entry,override){return q*entry*maintenanceRate(q,override)}
+function totalMaintenance(s){return maintenance(s.qL,s.eL,s.mmrOverride)+maintenance(s.qS,s.eS,s.mmrOverride)}
 function readState(){
   const v=Object.fromEntries(fieldIds.map(id=>[id,$(id).value]));
-  for(const k of ['mark','ratio','shortEntry','shortValue','shortPnl','longEntry','longValue','longPnl','fee','marginAmount','leverage'])v[k]=num(v[k]);
-  v.ratio/=100;v.fee/=100;v.legacy=v.formula==='legacy';
-  if(![v.mark,v.ratio,v.shortEntry,v.shortValue,v.shortPnl,v.longEntry,v.longValue,v.longPnl].every(Number.isFinite)||v.mark<=0||v.ratio<=0)return null;
+  for(const k of fieldIds.filter(k=>!['marginAmount','leverage'].includes(k)))v[k]=num(v[k]);
+  v.marginAmount=num(v.marginAmount);v.leverage=num(v.leverage);v.ratio/=100;v.fee/=100;v.liqFee/=100;v.mmrOverride/=100;
+  if(![v.mark,v.walletBalance,v.shortEntry,v.shortValue,v.shortPnl,v.longEntry,v.longValue,v.longPnl].every(Number.isFinite)||v.mark<=0)return null;
+  if(!Number.isFinite(v.orderMargin))v.orderMargin=0;if(!Number.isFinite(v.fee))v.fee=.0002;if(!Number.isFinite(v.liqFee))v.liqFee=.0004;
   v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;
-  const mm=maintenance(Math.max(v.qS,v.qL)*v.mark,v.fee,v.legacy);
-  v.equity=mm/v.ratio;v.balance=v.equity-v.shortPnl-v.longPnl;
+  v.balance=v.walletBalance;
+  v.equity=v.walletBalance+(Number.isFinite(v.walletPnl)?v.walletPnl:v.shortPnl+v.longPnl);
   return v;
 }
 function liquidation(s){
-  const qMax=Math.max(s.qL,s.qS),net=s.qL-s.qS,eq=s.balance+s.qL*(s.mark-s.eL)+s.qS*(s.eS-s.mark),mm=maintenance(qMax*s.mark,s.fee,s.legacy);
-  if(eq<=mm)return {immediate:true,side:net>=0?'롱':'숏',risk:mm/eq};
-  if(Math.abs(net)<1e-10)return {price:null,side:'중립',risk:mm/eq};
-  const candidates=[];
-  for(let i=0;i<tiers.length;i++){
-    const den=(tiers[i][2]+s.fee)*qMax-s.qL+s.qS;
-    if(Math.abs(den)<1e-12)continue;
-    const p=(s.balance-s.qL*s.eL+s.qS*s.eS+(s.legacy?0:offsets[i]))/den,notional=p*qMax;
-    if(p>0&&notional>=tiers[i][0]-1e-6&&notional<=tiers[i][1]+1e-6)candidates.push(p);
-  }
-  const adverse=net>0?candidates.filter(p=>p<s.mark):candidates.filter(p=>p>s.mark);
-  const price=adverse.length?(net>0?Math.max(...adverse):Math.min(...adverse)):null;
-  return {price,side:net>0?'롱':'숏',risk:mm/eq,net};
+  const net=s.qL-s.qS,mm=totalMaintenance(s),eq=s.balance-s.orderMargin+s.qL*(s.mark-s.eL)+s.qS*(s.eS-s.mark),reserve=s.mark*(s.qL+s.qS)*s.liqFee;
+  if(eq<=mm+reserve)return {immediate:true,side:net>=0?'롱':'숏',risk:(mm+reserve)/eq};
+  const den=net-s.liqFee*(s.qL+s.qS),numerator=mm-s.balance+s.orderMargin+s.qL*s.eL-s.qS*s.eS;
+  if(Math.abs(den)<1e-10)return {price:null,side:'중립',risk:(mm+reserve)/eq};
+  const p=numerator/den,adverse=p>0&&(net>0?p<s.mark:p>s.mark);
+  return {price:adverse?p:null,side:net>0?'롱':'숏',risk:(mm+reserve)/eq,net};
 }
 function act(v,type,fraction,margin){
-  const s={mark:v.mark,fee:v.fee,legacy:v.legacy,balance:v.balance,qL:v.qL,qS:v.qS,eL:v.longEntry,eS:v.shortEntry};
+  const s={mark:v.mark,fee:v.fee,liqFee:v.liqFee,mmrOverride:v.mmrOverride,orderMargin:v.orderMargin,balance:v.balance,qL:v.qL,qS:v.qS,eL:v.longEntry,eS:v.shortEntry};
   if(type==='closeShort'){const q=s.qS*fraction;s.balance+=q*(s.eS-s.mark)-q*s.mark*s.fee;s.qS-=q}
   if(type==='closeLong'){const q=s.qL*fraction;s.balance+=q*(s.mark-s.eL)-q*s.mark*s.fee;s.qL-=q}
   if(type==='addShort'){const q=margin!=null?margin*v.leverage/s.mark:s.qS*fraction;s.balance-=q*s.mark*s.fee;s.eS=(s.qS*s.eS+q*s.mark)/(s.qS+q);s.qS+=q}
@@ -134,8 +130,8 @@ function render(){
   const v=readState();if(!v){$('results').hidden=true;$('summary').hidden=true;return}
   $('results').hidden=false;$('summary').hidden=false;
   const net=v.qL-v.qS;
-  const positionValue=Math.max(v.qS,v.qL)*v.mark,mmr=maintenanceRate(positionValue),mm=maintenance(positionValue,v.fee,v.legacy);
-  $('summary').innerHTML=`<div class="metric"><span>현재 마크가</span><b>${money(v.mark)}</b></div><div class="metric"><span>추정 계정 평가금</span><b>${money(v.equity)} USDT</b></div><div class="metric"><span>현재 순포지션</span><b class="${net>=0?'long':'short'}">${net>=0?'롱':'숏'} ${money(Math.abs(net))} BTC</b></div><div class="metric"><span>현재 마진 비율</span><b>${money(v.ratio*100)}%</b></div><div class="metric"><span>적용 BTC MMR</span><b>${money(mmr*100)}%</b></div><div class="metric"><span>추정 유지증거금</span><b>${money(mm)} USDT</b></div>`;
+  const mm=totalMaintenance({qL:v.qL,qS:v.qS,eL:v.longEntry,eS:v.shortEntry,mmrOverride:v.mmrOverride}),longRate=maintenanceRate(v.qL,v.mmrOverride),shortRate=maintenanceRate(v.qS,v.mmrOverride);
+  $('summary').innerHTML=`<div class="metric"><span>현재 마크가</span><b>${money(v.mark)}</b></div><div class="metric"><span>지갑 잔액</span><b>${money(v.walletBalance)} USDT</b></div><div class="metric"><span>현재 총 순자산</span><b>${money(v.equity)} USDT</b></div><div class="metric"><span>현재 순포지션</span><b class="${net>=0?'long':'short'}">${net>=0?'롱':'숏'} ${money(Math.abs(net))} BTC</b></div><div class="metric"><span>화면의 마진 비율</span><b>${money(v.ratio*100)}%</b></div><div class="metric"><span>적용 MMR (롱 / 숏)</span><b>${money(longRate*100)}% / ${money(shortRate*100)}%</b></div><div class="metric"><span>교차 유지증거금 합계</span><b>${money(mm)} USDT</b></div><div class="metric"><span>미체결 주문 증거금</span><b>${money(v.orderMargin)} USDT</b></div>`;
   $('closeRows').innerHTML=presets.map(p=>{const a=act(v,'closeShort',p/100),b=act(v,'closeLong',p/100);return `<tr class="${rowClass(a,b,v.mark)}"><td><strong>${p}%</strong></td><td>${resultCell(a,v.mark)}</td><td>${distanceCell(a,v.mark)}</td><td>${resultCell(b,v.mark)}</td><td>${distanceCell(b,v.mark)}</td></tr>`}).join('');
   $('addRows').innerHTML=presets.map(p=>{const a=act(v,'addShort',p/100),b=act(v,'addLong',p/100);return `<tr class="${rowClass(a,b,v.mark)}"><td><strong>+${p}%</strong></td><td>${resultCell(a,v.mark)}</td><td>${distanceCell(a,v.mark)}</td><td>${resultCell(b,v.mark)}</td><td>${distanceCell(b,v.mark)}</td></tr>`}).join('');
   const amount=Math.max(0,v.marginAmount||0),a=act(v,'addShort',0,amount),b=act(v,'addLong',0,amount),note=`증거금 ${money(amount)} × ${money(v.leverage)} = ${money(amount*v.leverage)} USDT`;
@@ -158,22 +154,31 @@ function parseOCR(text){
   const shortEntry=mark+short.pnl/qS,longEntry=mark-long.pnl/qL;
   return {mark,ratio:short.ratio||long.ratio,shortEntry,shortValue:short.position,shortPnl:short.pnl,longEntry,longValue:long.position,longPnl:long.pnl};
 }
+function parseWalletOCR(text){
+  const values=numericTokens(text).filter(x=>!x.percent&&Math.abs(x.value)>=1000).map(x=>x.value),wallet=values.find(x=>x>0),pnl=values.find(x=>x<0);
+  if(!Number.isFinite(wallet)||!Number.isFinite(pnl))throw Error('지갑 잔액과 계정 미실현 PNL을 찾지 못했습니다.');
+  return {walletBalance:wallet,walletPnl:pnl};
+}
+function parseScreen(text){
+  if(/BTC\s*USDT|포지션\s*수량|오픈\s*시작가|시장\s*평균가/i.test(text))return {kind:'포지션',values:parseOCR(text)};
+  return {kind:'자산',values:parseWalletOCR(text)};
+}
 async function preprocess(file){
   const img=await createImageBitmap(file),scale=Math.min(3,Math.max(1,1200/img.width)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height);for(let i=0;i<d.data.length;i+=4){let v=255-Math.max(d.data[i],d.data[i+1],d.data[i+2]);v=Math.max(0,Math.min(255,(v-128)*1.5+128));d.data[i]=d.data[i+1]=d.data[i+2]=v}x.putImageData(d,0,0);return c}
 async function recognize(file){
   $('status').className='status';$('status').textContent='이미지 선명화 중…';const image=await preprocess(file);
   const r=await Tesseract.recognize(image,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('status').textContent=`숫자 읽는 중… ${Math.round((m.progress||0)*100)}%`}});return r.data.text;
 }
-async function loadImage(file){if(!file?.type.startsWith('image/'))return;$('preview').src=URL.createObjectURL(file);try{const text=await recognize(file);$('raw').value=text;const values=parseOCR(text);for(const [k,v] of Object.entries(values))$(k).value=v;$('status').textContent='인식 완료 — 아래 계산값을 확인하세요.';render()}catch(err){$('status').className='status error';$('status').textContent=`자동 인식 실패: ${err.message} 아래 ‘인식값 확인·수정’에서 숫자를 입력하세요.`;$('edit').open=true}}
-$('shot').addEventListener('change',e=>loadImage(e.target.files[0]));
+async function loadImage(file){if(!file?.type.startsWith('image/'))return;$('preview').src=URL.createObjectURL(file);try{const text=await recognize(file),parsed=parseScreen(text);$('raw').value=`[${parsed.kind} 화면]\n${text}`;for(const [k,v] of Object.entries(parsed.values))$(k).value=v;$('status').textContent=`${parsed.kind} 화면 인식 완료${readState()?' — 계산을 갱신했습니다.':' — 나머지 화면도 넣어주세요.'}`;render()}catch(err){$('status').className='status error';$('status').textContent=`자동 인식 실패: ${err.message} 아래 ‘인식값 확인·수정’에서 숫자를 입력하세요.`;$('edit').open=true}}
+$('shot').addEventListener('change',async e=>{for(const file of e.target.files)await loadImage(file)});
 document.addEventListener('paste',e=>{const file=[...(e.clipboardData?.items||[])].find(item=>item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();loadImage(file)}});
 for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.add('drag')});
-for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{$('drop').classList.remove('drag');if(event==='drop'){e.preventDefault();loadImage(e.dataTransfer.files[0])}});
-fieldIds.forEach(id=>$(id).addEventListener(id==='formula'?'change':'input',render));
+for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{$('drop').classList.remove('drag');if(event==='drop'){e.preventDefault();[...e.dataTransfer.files].forEach(loadImage)}});
+fieldIds.forEach(id=>$(id).addEventListener('input',render));
 
-// ponytail: 한 장의 Bitget형 BTCUSDT 화면만 자동 파싱한다. 다른 거래소 레이아웃이 필요해질 때 파서를 추가한다.
+// ponytail: 현재 사용 중인 MEXC 두 화면만 파싱한다. 다른 거래소가 필요할 때 별도 파서를 추가한다.
 function selfCheck(){
-  const v={mark:75220.4,ratio:.4725,shortEntry:87592.6,shortValue:1989073.7807,shortPnl:327159.32182,longEntry:93803.2,longValue:1998491.4374,longPnl:-493713.40524,fee:.0006,legacy:false,leverage:30};v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;const mm=maintenance(Math.max(v.qS,v.qL)*v.mark,v.fee);v.equity=mm/v.ratio;v.balance=v.equity-v.shortPnl-v.longPnl;console.assert(Math.abs(act(v,'closeShort',1).price-74715.8)<2,'close-all-short check');console.assert(Math.abs(act(v,'closeShort',.8).price-74577.8)<2,'close-short check');console.assert(Math.abs(act(v,'closeLong',.8).price-75858.5)<2,'close-long check')}
+  const v={mark:75220.4,walletBalance:273373.69329846,balance:273373.69329846,orderMargin:0,shortEntry:87592.6,shortValue:1989073.7807,longEntry:93803.2,longValue:1998491.4374,fee:.0002,liqFee:.0004,mmrOverride:NaN,leverage:30};v.qS=v.shortValue/v.mark;v.qL=v.longValue/v.mark;console.assert(Math.abs(act(v,'closeShort',1).price-71712.6)<2,'close-all-short check');console.assert(Math.abs(act(v,'closeShort',.5).price-68681.4)<2,'close-half-short check');console.assert(Math.abs(act(v,'closeShort',.3).price-64676.5)<2,'close-30%-short check')}
 selfCheck();
 </script>
 </body>
